@@ -31,7 +31,7 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
 # LIBRARIES
 
   # Install - this process might take up to 10 minutes
-    if(!require(caret)) install.packages("caret")
+    if(!require(caret)) install.packages("caret", dependencies = TRUE)
     if(!require(factoextra)) install.packages("factoextra")
     if(!require(GGally)) install.packages("GGally") 
     if(!require(knitr)) install.packages("knitr")
@@ -39,9 +39,10 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
     if(!require(rattle)) install.packages("rattle")    
     if(!require(rpart.plot)) install.packages("rpart.plot")
     if(!require(tidyverse)) install.packages("tidyverse")
+          install.packages("e1071")
+          library(e1071)
                                              
-                                             
-                                         
+wineData$Proline                                             
 # DATASET SNAPSHOT
     
   head(wineData)  
@@ -82,13 +83,13 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
 # DATA PARTIONING
   
   # Create Training set
-    set.seed(9)
+    set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
     train_ind <- createDataPartition(wineData$Type, times = 1, p = 0.6, list = FALSE)
     train_wineData <- wineData %>% slice(train_ind)  # n_train = 108
     temp_wineData <- wineData %>% slice(-train_ind)
     
   # Create Test and Validation sets
-    set.seed(9)
+    set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
     testValid_ind <- createDataPartition(temp_wineData$Type, times = 1, p = 0.5, list = FALSE)
     test_wineData <- temp_wineData %>% slice(testValid_ind)  # n_test = 36 
     validation_wineData <- temp_wineData %>% slice(-testValid_ind)  #n_valid = 34
@@ -151,7 +152,7 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
 # MACHINE LEARNING
    
   # ALGORITHM 1 - Classification Decision Tree (CDT) w/ tuned 'complexity parameter' (cp)
-    set.seed(9)
+    set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
     cdt_fit <- train(Type ~ ., 
                      method = "rpart",
                      tuneGrid = data.frame (cp = seq(0.0, 0.1, len = 20)),
@@ -169,7 +170,7 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
                            tuneGrid = data.frame (cp = cdt_fit$bestTune),
                            data = train_wineData)
     
-    set.seed(9)
+    set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
     cdt_predict <- predict(final_cdt_fit, test_wineData)
     cdt_ConfusionMatrix <- confusionMatrix(cdt_predict, reference = test_wineData$Type)
     # Produces accuracy of 94.4% - it seems the predictors provide sufficiently meaningful distinctions between wine 'types'.
@@ -180,7 +181,7 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
   
     
   # ALGORITHM 2 - Random Forest
-    set.seed(9)
+    set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
     rf_fit <- randomForest(Type ~ ., data = train_wineData)
     
     # Extracting variable importance
@@ -202,7 +203,7 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
     
     
     # Fit the random forest model to test data
-    set.seed(9)
+    set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
     rf_predicts <- predict(rf_fit, test_wineData)
     rf_confusionMatrix <- confusionMatrix(rf_predicts, reference = test_wineData$Type)
     rf_confusionMatrix  # Shows 100% accuracy - a possible indication of overfitting and/or random forest's ability to delineate fairly robust categories - i.e. "types" of wine.
@@ -210,7 +211,7 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
     
     
   # ALGORITHM 3 - K-Nearest Neighbor w/ tuned 'k'
-    set.seed(9)
+    set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
     knn_fit <- train(Type ~ ., method = "knn", 
                      data = train_wineData,
                      tuneGrid = data.frame(k = seq(3, 19, 2)))
@@ -226,7 +227,7 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
       # (1) All k's produce accuracy >92%.  Such accuracy appears to be a result of wine 'types' being meaningful categories.  
       # (2) Based on the training data, k = 11 maximizes accuracy (94.1%)
     
-    set.seed(9)
+    set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
     knn_confusionMatrix <- confusionMatrix(predict(knn_fit, test_wineData, type = "raw"), test_wineData$Type)
     knn_confusionMatrix$overall["Accuracy"]
     # High overall accuracy (97.2%), specificity, and sensivity, with one Class 2 observation being misclassified as Class 3.
@@ -236,7 +237,7 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
 # EXPLORING DIMENSION REDUCTION WITH PCA
 # The dominance of select predictors and intra-predictor correlation indicates that dimensino reduction might (also) be a fruitful approach
     
-    set.seed(9)
+    set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
     pcaLoadings <- prcomp(train_wineData[,c(2:14)], center = TRUE, scale. = TRUE)
 
   # Visualizations
@@ -249,13 +250,13 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
     
   # Fitting & Predicting
     # Taking first 6 PCs and append to training wine types
-      set.seed(9)
+      set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
       trainPCA <- as.data.frame(cbind(train_wineData[, 1], pcaLoadings$x[, 1:6]))
       names(trainPCA) <- c("Type", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6")
       trainPCA$Type <- as.factor(trainPCA$Type)
     
     # Use PCs in K-NN model    
-      set.seed(9)
+      set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
       knnPCA_fit <- train(Type ~ ., method = "knn", 
                           data = trainPCA,
                           tuneGrid = data.frame(k = seq(3, 19, 2)))
@@ -268,7 +269,7 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
       knnPCA_fit$bestTune  # Optimal tune - 17 neighbors
       
     # Taking first 6 PCs and append to training wine types
-      set.seed(9)
+      set.seed(9, sample.kind = "Rounding")  # If using R <v3.6, use set.seed(9)
       wineTestPCA <- predict(pcaLoadings, newdata = test_wineData)
       testPCA <- as.data.frame(cbind(test_wineData[, 1], wineTestPCA[, 1:6]))
       names(testPCA) <- c("Type", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6")

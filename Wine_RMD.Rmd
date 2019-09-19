@@ -65,13 +65,13 @@ suppressWarnings(print(pairsPlot, progress = FALSE))
 # DATA PARTIONING
   
   # Create Training set
-    set.seed(9)
+    suppressWarnings(set.seed(9, sample.kind = "Rounding"))
     train_ind <- createDataPartition(wineData$Type, times = 1, p = 0.6, list = FALSE)
     train_wineData <- wineData %>% slice(train_ind)  # n_train = 108
     temp_wineData <- wineData %>% slice(-train_ind)
     
   # Create Test and Validation sets
-    set.seed(9)
+    suppressWarnings(set.seed(9, sample.kind = "Rounding"))
     testValid_ind <- createDataPartition(temp_wineData$Type, times = 1, p = 0.5, list = FALSE)
     test_wineData <- temp_wineData %>% slice(testValid_ind)  # n_test = 36 
     validation_wineData <- temp_wineData %>% slice(-testValid_ind)  #n_valid = 34
@@ -140,7 +140,7 @@ First, a Classification Decision Tree was trained with a tuned complexity parame
 
 ```{r fig.width=7.5, fig.height=4.5, echo = FALSE}
 # ALGORITHM 1 - Classification Decision Tree (CDT) w/ tuned 'complexity parameter' (cp)    
-    set.seed(9)
+    suppressWarnings(set.seed(9, sample.kind = "Rounding"))
     cdt_fit <- train(Type ~ ., 
                      method = "rpart",
                      tuneGrid = data.frame (cp = seq(0.0, 0.1, len = 20)),
@@ -166,7 +166,7 @@ First, a Classification Decision Tree was trained with a tuned complexity parame
     
     CDT_Model <- rpart.plot(final_cdt_fit$finalModel , type = 3, main = "Figure 3. Wine Type Classification Tree", legend.x = .85, legend.y = 1.05, extra = 2)
     
-    set.seed(9)
+    suppressWarnings(set.seed(9, sample.kind = "Rounding"))
     cdt_predict <- predict(final_cdt_fit, test_wineData)
     cdt_ConfusionMatrix <- confusionMatrix(cdt_predict, reference = test_wineData$Type)
     
@@ -184,7 +184,7 @@ Second, a random forest model was trained and the variable importance extracted.
 ```{r fig.width=9.5, fig.height=6, echo = FALSE}
 
   # ALGORITHM 2 - Random Forest
-    set.seed(9)
+    suppressWarnings(set.seed(9, sample.kind = "Rounding"))
     rf_fit <- randomForest(Type ~ ., data = train_wineData)
     
     # Extracting variable importance
@@ -204,7 +204,7 @@ Second, a random forest model was trained and the variable importance extracted.
         plot_varImport
         
     # Fit the random forest model to test data
-      set.seed(9)
+      suppressWarnings(set.seed(9, sample.kind = "Rounding"))
       rf_predicts <- predict(rf_fit, test_wineData)
       rf_confusionMatrix <- confusionMatrix(rf_predicts, reference = test_wineData$Type)
         
@@ -218,7 +218,7 @@ Lastly, two K-Nearest Neighbor (KNN) models were trained.  The first was trained
 ```{r fig.width=7.5, fig.height=4.5, echo = FALSE}
 
 # ALGORITHM 3 - K-Nearest Neighbor w/ tuned 'k'
-    set.seed(9)
+    suppressWarnings(set.seed(9, sample.kind = "Rounding"))
     knn_fit <- train(Type ~ ., method = "knn", 
                      data = train_wineData,
                      tuneGrid = data.frame(k = seq(3, 19, 2)))
@@ -226,7 +226,7 @@ Lastly, two K-Nearest Neighbor (KNN) models were trained.  The first was trained
     NumNeighbors_plot <- ggplot(knn_fit, highlight = TRUE) + 
                          ggtitle("Figure 5. Neighbors Tuned for Accuracy")
     
-    set.seed(9)
+    suppressWarnings(set.seed(9, sample.kind = "Rounding"))
     knn_confusionMatrix <- confusionMatrix(predict(knn_fit, test_wineData, type = "raw"), test_wineData$Type)
     
     NumNeighbors_plot
@@ -242,7 +242,7 @@ Lastly, two K-Nearest Neighbor (KNN) models were trained.  The first was trained
 # EXPLORING DIMENSION REDUCTION WITH PCA
 # The dominance of select predictors and intra-predictor correlation indicates that dimensino reduction might (also) be a fruitful approach
     
-    set.seed(9)
+    suppressWarnings(set.seed(9, sample.kind = "Rounding"))
     pcaLoadings <- prcomp(train_wineData[,c(2:14)], center = TRUE, scale. = TRUE)
 
   # Visualizations
@@ -262,13 +262,13 @@ Lastly, two K-Nearest Neighbor (KNN) models were trained.  The first was trained
 
 # Fitting & Predicting
     # Taking first 6 PCs and append to training wine types
-      set.seed(9)
+      suppressWarnings(set.seed(9, sample.kind = "Rounding"))
       trainPCA <- as.data.frame(cbind(train_wineData[, 1], pcaLoadings$x[, 1:6]))
       names(trainPCA) <- c("Type", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6")
       trainPCA$Type <- as.factor(trainPCA$Type)
     
     # Use PCs in K-NN model    
-      set.seed(9)
+      suppressWarnings(set.seed(9, sample.kind = "Rounding"))
       knnPCA_fit <- train(Type ~ ., method = "knn", 
                           data = trainPCA,
                           tuneGrid = data.frame(k = seq(3, 19, 2)))
@@ -278,12 +278,12 @@ Lastly, two K-Nearest Neighbor (KNN) models were trained.  The first was trained
       NumNeighborsPCA_plot
       
     # Taking first 6 PCs and append to training wine types
-      set.seed(9)
+      suppressWarnings(set.seed(9, sample.kind = "Rounding"))
       wineTestPCA <- predict(pcaLoadings, newdata = test_wineData)
       testPCA <- as.data.frame(cbind(test_wineData[, 1], wineTestPCA[, 1:6]))
       names(testPCA) <- c("Type", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6")
       
-      set.seed(9)
+      suppressWarnings(set.seed(9, sample.kind = "Rounding"))
       knnPCA_confusionMatrix <- confusionMatrix(predict(knnPCA_fit, testPCA, type = "raw"), test_wineData$Type)
       
 ```
