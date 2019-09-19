@@ -41,7 +41,7 @@ wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databa
     if(!require(tidyverse)) install.packages("tidyverse")
                                              
                                              
-wineData$Proline                                             
+                                         
 # DATASET SNAPSHOT
     
   head(wineData)  
