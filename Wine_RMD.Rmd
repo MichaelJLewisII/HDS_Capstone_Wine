@@ -1,0 +1,325 @@
+---
+title: 'HarvardX Data Science Capstone: Classifying Wine'
+
+author: "Michael Lewis"
+date:  "`r format(Sys.time(), '%d %B %Y')`"
+output: 
+  pdf_document: default
+---
+&nbsp;
+
+# Executive Summary {#anchor}
+
+The goal of this project was to evaluate and classify the wine of three cultivators from the same region in Italy.  Each wine had thirteen physical or chemical properties measured.  These were used to train machine learning algorithms to distinguish between each cultivator, or "type".  The data used for this project came from the [University of California at Irvine's Machine Learning Repository](https://archive.ics.uci.edu/ml/datasets/wine).
+
+```{r include=FALSE}
+# WINE CLASSIFICATION FROM UC IRVINE MACHINE LEARNING REPOSITORY
+wineData <- read.csv(url("https://archive.ics.uci.edu/ml/machine-learning-databases/wine/wine.data"), header = FALSE, sep = ",", 
+                      col.names =  c("Type", "Alcohol", "MalicAcid", 
+                                     "Ash", "Alcalinity", "Magnesium",
+                                     "Phenols", "Flavanoids", "Nonflavanoids",
+                                     "Proanthocyanins", "ColorIntensity", "Hue", 
+                                     "Dilution", "Proline"))  
+
+wineData$Type <- as.factor(wineData$Type)
+
+    if(!require(caret)) install.packages("caret")
+    if(!require(factoextra)) install.packages("factoextra")
+    if(!require(GGally)) install.packages("GGally") 
+    if(!require(knitr)) install.packages("knitr")
+    if(!require(randomForest)) install.packages("randomForest")
+    if(!require(rattle)) install.packages("rattle")    
+    if(!require(rpart.plot)) install.packages("rpart.plot")
+    if(!require(tidyverse)) install.packages("tidyverse")
+```
+
+In order to determine a rigorous analytical approach, exploratory data analysis was performed and the data integrity was evaluated.  From there, a validation set was generated via holdout sampling, and data transformations were made.  Next, several machine learning algorithms (CDT, Random Forest, and KNN) were trained and dimension reduction (PCA) explored.  Each algorithm's perfromance was compared, and though all performed well, the decision was made to move-forward with the K-Nearest Neighbor algorithm.  When applied to the validation data, this model acheived 94% accuracy while maintaining a relatively intuitive understanding of how the algorithm determines the classification of each wine.  The thirteen attributes measured and the described approach constitute a success for classifying this region's wine types.  However, further work (with a larger sample of wines from diverse regions) is needed to enable development of a generalized wine classification algorithm.
+
+&nbsp;
+&nbsp;
+
+# Methods & Analysis {#css_id}
+
+In order to become more familiar with the data set, and glean insight as to how to proceed with a classification algorithm, exploratory data analysis was performed.  First, the classification variable ("type") was updated to a factor and missing values were searched for - none were found.  Next, coupling variable summary statistics and their pairwise comparisons showed variable standardization would likely benefit prediction efforts as some algorithms use Euclidean Distance which is affected by "scales" of variables.  Other interesting insights revealed by evaluating individual plots of the pairs-plot included:
+
+  (1) Among some of the predictor variables, there is some substantial correlation [e.g. Flavanoids-Proanthocyanins (0.653) and Flavanoids-Phenols (0.865)].  Thus dimension reduction might prove fruitful.  These correlations are respectivley shown in **Figure 1** at the following indeces:  [10,8] and [8,7].
+  
+  (2) High accuracy is a possibility given the ability to delineate based on the relatively stark stratifcation of wine Type 1 across Proline as well as wine Type 3 along Malic Acid and Color Intensity.  These distributions are respectivley shown in  **Figure 1** at the following indeces: [14,14], [3,3], and [11,11].
+  
+Next, to mitigate the risk of overfitting and allow for the evaluation of model performance, the data set was partitioned into training (60%), test (20%), and validation (20%) sets.  From here, the predictors were standardized by subtracting the mean of a given variable from each observation, then dividing the result by the variable's standard deviation.
+
+```{r echo=FALSE}
+pairsPlot <- ggpairs(wineData, title = "Figure 1. Pairwise variable exploration", legend = 1,
+                    aes(colour = Type), lower=list(combo=wrap("facethist", binwidth=0.8)))
+```
+
+```{r, fig.width=20,fig.height=20, echo=FALSE}
+suppressWarnings(print(pairsPlot, progress = FALSE))
+```
+
+
+
+
+
+```{r echo = FALSE}
+# DATA PARTIONING
+  
+  # Create Training set
+    set.seed(9)
+    train_ind <- createDataPartition(wineData$Type, times = 1, p = 0.6, list = FALSE)
+    train_wineData <- wineData %>% slice(train_ind)  # n_train = 108
+    temp_wineData <- wineData %>% slice(-train_ind)
+    
+  # Create Test and Validation sets
+    set.seed(9)
+    testValid_ind <- createDataPartition(temp_wineData$Type, times = 1, p = 0.5, list = FALSE)
+    test_wineData <- temp_wineData %>% slice(testValid_ind)  # n_test = 36 
+    validation_wineData <- temp_wineData %>% slice(-testValid_ind)  #n_valid = 34
+  
+  # Remove temporary objects
+    rm(train_ind, testValid_ind, temp_wineData)
+```
+
+```{r echo = FALSE}
+# Standardization is a distinct step (at least for validation data) because the computation should not mix training and evaluation data.
+    
+  # Train dataset
+    train_wineData$Alcohol <- scale(train_wineData$Alcohol, center = TRUE, scale = TRUE)
+    train_wineData$MalicAcid <- scale(train_wineData$MalicAcid, center = TRUE, scale = TRUE)
+    train_wineData$Ash <- scale(train_wineData$Ash, center = TRUE, scale = TRUE)
+    train_wineData$Alcalinity<- scale(train_wineData$Alcalinity, center = TRUE, scale = TRUE)
+    train_wineData$Magnesium<- scale(train_wineData$Magnesium, center = TRUE, scale = TRUE)
+    train_wineData$Phenols <- scale(train_wineData$Phenols, center = TRUE, scale = TRUE)
+    train_wineData$Flavanoids <- scale(train_wineData$Flavanoids, center = TRUE, scale = TRUE)
+    train_wineData$Nonflavanoids <- scale(train_wineData$Nonflavanoids, center = TRUE, scale = TRUE)
+    train_wineData$Proanthocyanins <- scale(train_wineData$Proanthocyanins, center = TRUE, scale = TRUE)
+    train_wineData$ColorIntensity <- scale(train_wineData$ColorIntensity, center = TRUE, scale = TRUE)
+    train_wineData$Hue <- scale(train_wineData$Hue, center = TRUE, scale = TRUE)
+    train_wineData$Dilution <- scale(train_wineData$Dilution, center = TRUE, scale = TRUE)
+    train_wineData$Proline<- scale(train_wineData$Proline, center = TRUE, scale = TRUE)
+  
+  # Test dataset
+    test_wineData$Alcohol <- scale(test_wineData$Alcohol, center = TRUE, scale = TRUE)
+    test_wineData$MalicAcid <- scale(test_wineData$MalicAcid, center = TRUE, scale = TRUE)
+    test_wineData$Ash <- scale(test_wineData$Ash, center = TRUE, scale = TRUE)
+    test_wineData$Alcalinity<- scale(test_wineData$Alcalinity, center = TRUE, scale = TRUE)
+    test_wineData$Magnesium<- scale(test_wineData$Magnesium, center = TRUE, scale = TRUE)
+    test_wineData$Phenols <- scale(test_wineData$Phenols, center = TRUE, scale = TRUE)
+    test_wineData$Flavanoids <- scale(test_wineData$Flavanoids, center = TRUE, scale = TRUE)
+    test_wineData$Nonflavanoids <- scale(test_wineData$Nonflavanoids, center = TRUE, scale = TRUE)
+    test_wineData$Proanthocyanins <- scale(test_wineData$Proanthocyanins, center = TRUE, scale = TRUE)
+    test_wineData$ColorIntensity <- scale(test_wineData$ColorIntensity, center = TRUE, scale = TRUE)
+    test_wineData$Hue <- scale(test_wineData$Hue, center = TRUE, scale = TRUE)
+    test_wineData$Dilution <- scale(test_wineData$Dilution, center = TRUE, scale = TRUE)
+    test_wineData$Proline<- scale(test_wineData$Proline, center = TRUE, scale = TRUE)
+    
+  # Validation set
+    validation_wineData$Alcohol <- scale(validation_wineData$Alcohol, center = TRUE, scale = TRUE)
+    validation_wineData$MalicAcid <- scale(validation_wineData$MalicAcid, center = TRUE, scale = TRUE)
+    validation_wineData$Ash <- scale(validation_wineData$Ash, center = TRUE, scale = TRUE)
+    validation_wineData$Alcalinity<- scale(validation_wineData$Alcalinity, center = TRUE, scale = TRUE)
+    validation_wineData$Magnesium<- scale(validation_wineData$Magnesium, center = TRUE, scale = TRUE)
+    validation_wineData$Phenols <- scale(validation_wineData$Phenols, center = TRUE, scale = TRUE)
+    validation_wineData$Flavanoids <- scale(validation_wineData$Flavanoids, center = TRUE, scale = TRUE)
+    validation_wineData$Nonflavanoids <- scale(validation_wineData$Nonflavanoids, center = TRUE, scale = TRUE)
+    validation_wineData$Proanthocyanins <- scale(validation_wineData$Proanthocyanins, center = TRUE, scale = TRUE)
+    validation_wineData$ColorIntensity <- scale(validation_wineData$ColorIntensity, center = TRUE, scale = TRUE)
+    validation_wineData$Hue <- scale(validation_wineData$Hue, center = TRUE, scale = TRUE)
+    validation_wineData$Dilution <- scale(validation_wineData$Dilution, center = TRUE, scale = TRUE)
+    validation_wineData$Proline<- scale(validation_wineData$Proline, center = TRUE, scale = TRUE)
+```
+
+&nbsp;
+&nbsp;
+
+Next, three algorithms and four models were trained then evaluated on the test data.  In each case, model performance was determined by examining accuracy.  This measure is reasonable as the cost associated with false negatives and false positives is equivalent.
+
+First, a Classification Decision Tree was trained with a tuned complexity parameter.  **Figure 2** shows the modest effect tuning the complexity parameter has on accuracy.  **Figure 3** shows the final model.
+
+&nbsp;
+
+```{r fig.width=7.5, fig.height=4.5, echo = FALSE}
+# ALGORITHM 1 - Classification Decision Tree (CDT) w/ tuned 'complexity parameter' (cp)    
+    set.seed(9)
+    cdt_fit <- train(Type ~ ., 
+                     method = "rpart",
+                     tuneGrid = data.frame (cp = seq(0.0, 0.1, len = 20)),
+                     data = train_wineData)
+  
+    CP_plot <- ggplot(cdt_fit, highlight = TRUE) +
+               ggtitle("Figure 2. Complexity Parameter Tuned for Accuracy") # Modest affect of complexity parameter on accuracy (~ 1.5 percentage points over range tested).
+    CP_plot
+    
+```    
+
+&nbsp;
+&nbsp;
+&nbsp;
+
+
+```{r fig.width=7.5, fig.height=4, echo = FALSE}    
+# Fit the CDT model to test data
+    final_cdt_fit <- train(Type ~ ., 
+                           method = "rpart",
+                           tuneGrid = data.frame (cp = cdt_fit$bestTune),
+                           data = train_wineData)    
+    
+    CDT_Model <- rpart.plot(final_cdt_fit$finalModel , type = 3, main = "Figure 3. Wine Type Classification Tree", legend.x = .85, legend.y = 1.05, extra = 2)
+    
+    set.seed(9)
+    cdt_predict <- predict(final_cdt_fit, test_wineData)
+    cdt_ConfusionMatrix <- confusionMatrix(cdt_predict, reference = test_wineData$Type)
+    
+```
+
+
+
+
+
+---
+---
+
+Second, a random forest model was trained and the variable importance extracted.  **Figure 4** shows the relatively large roles that color intensity, proline, flavanoids, dilution, and alcohol content played in decreasing node impurity.
+
+```{r fig.width=9.5, fig.height=6, echo = FALSE}
+
+  # ALGORITHM 2 - Random Forest
+    set.seed(9)
+    rf_fit <- randomForest(Type ~ ., data = train_wineData)
+    
+    # Extracting variable importance
+      varImport_df <- as.data.frame(rf_fit$importance, row.names = NULL , optional = FALSE,
+                                    make.names = TRUE,
+                                    importance = as.vector(importance(rf_fit)),
+                                    stringsAsFactors = default.stringsAsFactors())
+      varImport_df <- rownames_to_column(varImport_df, var = "Characteristic")
+    
+      # Variable importance plot
+        plot_varImport <- ggplot(varImport_df, aes(x = reorder(Characteristic, -MeanDecreaseGini), y = MeanDecreaseGini)) + 
+                          ggtitle("Figure 4. Variable Importance from Random Forests") +
+                          geom_text(aes(label = round(MeanDecreaseGini, 1), vjust = -0.5)) +
+                          xlab("Characteristic") +
+                          scale_x_discrete(labels = abbreviate) +
+                          geom_col(fill = "#06b5ed")
+        plot_varImport
+        
+    # Fit the random forest model to test data
+      set.seed(9)
+      rf_predicts <- predict(rf_fit, test_wineData)
+      rf_confusionMatrix <- confusionMatrix(rf_predicts, reference = test_wineData$Type)
+        
+```
+
+&nbsp;
+&nbsp;
+
+Lastly, two K-Nearest Neighbor (KNN) models were trained.  The first was trained using the original 13 variables.  **Figure 5** shows the effects of the number of neighbors on accuracy.  Given the relatively distinct nature of each wine 'type' and the correlation of several explanatory variables, dimension reduction was performed before training the second KNN model.  Principal Component Analysis (PCA) was performed and the number of components selected for the model was based on the second elbow in a scree plot.  **Figure 6** shows the scree plot of the components.  Similarly, **Figure 7** shows the and the cumulative variance explained by the components.  The first 6 components explain 86.3% of the variance contained in the original 13 variables.  **Figure 8** shows the optimal tuned number of neighbors for the KNN-PCA model.
+
+```{r fig.width=7.5, fig.height=4.5, echo = FALSE}
+
+# ALGORITHM 3 - K-Nearest Neighbor w/ tuned 'k'
+    set.seed(9)
+    knn_fit <- train(Type ~ ., method = "knn", 
+                     data = train_wineData,
+                     tuneGrid = data.frame(k = seq(3, 19, 2)))
+    
+    NumNeighbors_plot <- ggplot(knn_fit, highlight = TRUE) + 
+                         ggtitle("Figure 5. Neighbors Tuned for Accuracy")
+    
+    set.seed(9)
+    knn_confusionMatrix <- confusionMatrix(predict(knn_fit, test_wineData, type = "raw"), test_wineData$Type)
+    
+    NumNeighbors_plot
+    
+```
+
+&nbsp;
+&nbsp;
+&nbsp;
+
+```{r fig.width=7.5, fig.height=4.5, echo = FALSE}
+
+# EXPLORING DIMENSION REDUCTION WITH PCA
+# The dominance of select predictors and intra-predictor correlation indicates that dimensino reduction might (also) be a fruitful approach
+    
+    set.seed(9)
+    pcaLoadings <- prcomp(train_wineData[,c(2:14)], center = TRUE, scale. = TRUE)
+
+  # Visualizations
+    # Scree PLot - shows 2 elbows, the first after component 3 (66.3% of cum. variance) and the second after component 6 (86.7% of cum. variance).
+      Scree <- fviz_eig(pcaLoadings, main = "Figure 6. Scree plot - Wine PCA", xlab = "Component Num")
+      Scree
+```
+
+```{r fig.width=7.5, fig.height=5, echo = FALSE}
+    # Cumulative Variance Plot
+      cumVariancePlot <- plot(cumsum(pcaLoadings$sdev^2 / sum(pcaLoadings$sdev^2)), type = "b", ylim = 0:1, main = "Figure 7. Cumulative Variance Explained in PCA", xlab = "Component Number", ylab = "Cum. % variance explained")
+```
+
+&nbsp;
+
+```{r fig.width=7.5, fig.height=4.5, echo = FALSE}
+
+# Fitting & Predicting
+    # Taking first 6 PCs and append to training wine types
+      set.seed(9)
+      trainPCA <- as.data.frame(cbind(train_wineData[, 1], pcaLoadings$x[, 1:6]))
+      names(trainPCA) <- c("Type", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6")
+      trainPCA$Type <- as.factor(trainPCA$Type)
+    
+    # Use PCs in K-NN model    
+      set.seed(9)
+      knnPCA_fit <- train(Type ~ ., method = "knn", 
+                          data = trainPCA,
+                          tuneGrid = data.frame(k = seq(3, 19, 2)))
+    
+      NumNeighborsPCA_plot <- ggplot(knnPCA_fit, highlight = TRUE) + 
+                              ggtitle("Figure 8. Neighbors Tuned for Accuracy under PCA")
+      NumNeighborsPCA_plot
+      
+    # Taking first 6 PCs and append to training wine types
+      set.seed(9)
+      wineTestPCA <- predict(pcaLoadings, newdata = test_wineData)
+      testPCA <- as.data.frame(cbind(test_wineData[, 1], wineTestPCA[, 1:6]))
+      names(testPCA) <- c("Type", "PC1", "PC2", "PC3", "PC4", "PC5", "PC6")
+      
+      set.seed(9)
+      knnPCA_confusionMatrix <- confusionMatrix(predict(knnPCA_fit, testPCA, type = "raw"), test_wineData$Type)
+      
+```
+
+
+
+# Results {#css_id}
+
+**Table 1** shows the accuracy of each model when evaluated against the test data.  As suggested during the exploratory data analysis phase, the stratification of wine types across the variables measured results in accuracy levels traditionally associated with model over-fitting (e.g. the lowest accuracy among all models was 94.4%).  
+
+```{r echo = FALSE}
+
+# MODEL SELECTION FOR VALDATION DATA
+    methods <- c("Decision Tree", "Random Forest", "KNN", "PCA-KNN")
+    
+    accuracies <- c(round(cdt_ConfusionMatrix$overall["Accuracy"]*100,1), 
+                    round(rf_confusionMatrix$overall["Accuracy"]*100,1),
+                    round(knn_confusionMatrix$overall["Accuracy"]*100,1),
+                    round(knnPCA_confusionMatrix$overall["Accuracy"]*100,1))
+
+    model_Results <- data.frame(Methods = methods, 
+                                Accuracy = accuracies)
+    
+    kable(model_Results, caption = "Comparing Model Accuracies")
+
+
+```
+
+This situation presents a unique, albeit somewhat uncommon challenge:  What should the decision rule be when deciding between comparably high-performing models?  In order to maintain straight-forward interpretability and avoid models with the highest likelihood of overfitting, **the standard K-Nearest Neighbor model** was selected for use on the "new" (validation) data.  This model produces a final **accuracy of 94.1%**.  
+
+&nbsp;
+&nbsp;
+
+# Conclusion {#css_id}
+
+The challenge presented with this data set was to classify Italian wines by cultivator ("type").  The chemical and physical properties measured for each wine provided sufficient between-type variance to allow for the development of highly accurate models across three algorithms - Classification Decision Trees, Random Forest, and K-Nearest Neighbors.  High accuracy was observed for models trained on the original 13 variables as well as the one trained on the first 6 principal components.  Given its performance and parsimony, the unreduced K-Nearest Neighbor algorithm served as the ideal candidate to be evaluated against the holdout sample.  It produced an accuracy of 94.1%.  
+
+Two important limitations of this project are:  (1) The fact that all wines were from the same region in Italy, and (2) fewer than 200 wines were evaluated.  In order to produce a more generalizable model, more regions and wines should be included.  This is of particular interest for future projects that could be developed from such modeling - i.e. classifying fradulent wines.  While the approach would be different than the one employed here, having a robust model of regional wine types would provide a baseline from which fraud detection could begin.
+
